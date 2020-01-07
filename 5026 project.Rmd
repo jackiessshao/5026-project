@@ -1,0 +1,173 @@
+---
+title: "5026 project"
+author: "Shijie Shao"
+date: "2020/12/10"
+output: html_document
+---
+
+---
+title: "5026 final project"
+author: "Shijie Shao"
+date: "2019/12/17"
+output: html_document
+---
+#1.read the data
+```{r}
+rm(list=ls())
+#setwd("C:/Users/apple/Desktop/graduate/5026/5026 final project") #set working directory
+#after data cleaning step, data5 got.
+load("data5.Rdata")
+```
+
+#2.data description
+```{r}
+library(psych)
+summarydata<-describeBy(data5) #get summary of data
+s1<-as.data.frame(summarydata)
+s2<-s1[,-c(1,c(1,6,7,11:ncol(s1)))] #delete useless cols
+s2
+```
+
+#3.plot data in boxplot to see the outliers
+```{r}
+
+par(mfrow=c(3,3)) 
+boxplot(data5$vote_average,xlab="vote_average")
+boxplot(data5$adult,xlab="adult")
+boxplot(data5$budget,xlab="budget")
+boxplot(data5$original_language,xlab="original_language")
+boxplot(data5$popularity,xlab="popularity")
+boxplot(data5$revenue,xlab="revenue")
+boxplot(data5$runtime,xlab="runtime")
+boxplot(data5$video,xlab="video")
+boxplot(data5$vote_count,xlab="vote_count")
+```
+
+#4. part of outliers based on the boxplot
+```{r}
+outlier <- sapply(data5[-c(2,4,8)],function(X){boxplot.stats(X)$out})
+outlier_location <- sapply(data5[-c(2,4,8)],function(X){which(X%in%boxplot.stats(X)$out)})
+todel <- (sort(unique(unlist(outlier_location))))
+data6 <- data5[-todel,]
+data7<-data6[,-c(2,8)] #delete useless variables
+
+#plot data in boxplot again
+par(mfrow=c(3,3))
+boxplot(data7$vote_average,xlab="vote_average")
+boxplot(data7$budget,xlab="budget")
+boxplot(data7$original_language,xlab="original_language")
+boxplot(data7$popularity,xlab="popularity")
+boxplot(data7$revenue,xlab="revenue")
+boxplot(data7$runtime,xlab="runtime")
+boxplot(data7$vote_count,xlab="vote_count")
+```
+
+#5.linear regression
+```{r}
+#first time linear regression
+reg1=lm(vote_average~.,data=data7)
+summary(reg1)
+
+#use the cut off point to remove more outliers
+qt(0.95, 4304-9-1)  #qt(1-alpha/2,n-p-1)  
+abs(rstudent(reg1))>qt(0.95, 4304-9-1) #outliers
+data8=data7[abs(rstudent(reg1))<qt(0.95, 43042-9-1),] #new data
+boxplot(data8) 
+attach(data8)
+
+#second time linear regression 
+reg2=lm(vote_average~.,data=data8)
+summary(reg2)
+
+#plot residuals to check normality/constant varience/linearity assumptions
+par(mfrow=c(2,2))
+plot(reg2)
+```
+
+#6.model selection
+```{r}
+#add intereaction terms
+data9=data8
+names(data9)<-c('y','x1','x2','x3','x4','x5','x6')
+attach(data9)
+x12=x1*x2 
+x23=x2*x3 
+x24=x2*x4 
+x25=x2*x5 
+x26=x2*x6 
+x11=x1^2
+x22=x2^2
+x33=x3^2
+x44=x4^2
+x55=x5^2
+x66=x6^2
+
+#BIC step
+library(bestglm)
+data10<-as.data.frame(cbind(data9,x11,x12,x23,x24,x25,x26,x33,x44,x55,x66))
+bs2 <- bestglm(Xy = data10, 
+               family = gaussian, 
+               IC = "BIC")
+summary(bs2)
+bs2$BestModel #best model selected
+bs2$Subsets   #details of best model.
+
+#third time linear regression
+X<-cbind(x1,x3,x4,x5,x6,x11,x23,x24,x26,x44,x33)
+data11<-as.data.frame(cbind(y,X)) #get new data with best model.
+reg3=lm(y~x1+x3+x4+x5+x6+x11+x23+x24+x26+x44+x33)
+summary(reg3)
+par(mfrow=c(2,2))
+plot(reg3)
+```
+
+#7.find the relationship of y and initial independent variables by ggplot
+```{r}
+library(ggplot2)
+#install.packages("Rmisc")
+library(Rmisc)
+
+p1<-ggplot(data =data8) +
+  geom_point(mapping = aes(x = popularity, y = vote_average, color =factor(original_language)))+  scale_color_manual(values=c("yellow","red"))
+
+p2<-ggplot(data =data8) +
+  geom_point(mapping = aes(x = runtime, y = vote_average, color =factor(original_language)))+  scale_color_manual(values=c("yellow","red"))
+
+p3<-ggplot(data =data8) +
+  geom_point(mapping = aes(x = vote_count, y = vote_average, color =factor(original_language)))+  scale_color_manual(values=c("yellow","red"))
+
+p4<-ggplot(data =data8) +
+  geom_point(mapping = aes(x = revenue, y = vote_average, color =factor(original_language)))+  scale_color_manual(values=c("yellow","red"))
+
+p5<-ggplot(data =data8) +
+  geom_point(mapping = aes(x = budget, y = vote_average, color =factor(original_language)))+  scale_color_manual(values=c("yellow","red"))
+multiplot(p1,p2,p3,p4,p5,cols=2) #plot all the graphs
+
+```
+
+#8.get the correlation of y and other variables of best model.
+```{r}
+#install.packages("corrgram")
+library(corrplot)
+library(corrgram)
+COR<-cor(data11)
+COR
+par(mfrow=c(1,1))
+corrplot(COR, order="AOE", method="circle", tl.pos="lt", type="upper",
+         addCoef.col="black", addCoefasPercent=TRUE,
+         sig.level=0.5, insig="blank")
+
+corrgram(data11) #visualization
+
+```
+
+#9.citation
+```{r}
+#citation
+citation(package = "psych")
+citation(package = "bestglm")
+citation(package = "ggplot2")
+citation(package = "Rmisc")
+citation(package = "corrplot")
+citation(package = "corrgram")
+```
